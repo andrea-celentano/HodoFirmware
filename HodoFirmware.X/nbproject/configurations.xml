@@ -28,7 +28,6 @@
         <itemPath>../Microchip/Include/TCPIP Stack/ZeroconfMulticastDNS.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/Telnet.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/TCPIP.h</itemPath>
-        <itemPath>../Microchip/Include/TCPIP Stack/ETHPIC32ExtPhySMSC8700.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/ETHPIC32ExtPhyRegs.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/DynDNS.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/DNS.h</itemPath>
@@ -38,7 +37,6 @@
         <itemPath>../Microchip/Include/TCPIP Stack/Announce.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/WFConsoleMsgs.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/WFRaw.h</itemPath>
-        <itemPath>../Microchip/Include/TCPIP Stack/ETHPIC32ExtPhyDP83640.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/Random.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/WFMgmtMsg.h</itemPath>
         <itemPath>../Microchip/Include/TCPIP Stack/ENC28J60.h</itemPath>
@@ -91,7 +89,7 @@
       <itemPath>../HardwareProfile.h</itemPath>
       <itemPath>../MyTFTP.h</itemPath>
       <itemPath>../Settings.h</itemPath>
-      <itemPath>HodoCrate.h</itemPath>
+      <itemPath>../HodoCrate.h</itemPath>
     </logicalFolder>
     <logicalFolder name="LinkerScript"
                    displayName="Linker Files"
@@ -161,7 +159,6 @@
         <itemPath>../Microchip/TCPIP Stack/Reboot.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/SPIEEPROM.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/SSL.c</itemPath>
-        <itemPath>../Microchip/TCPIP Stack/ETHPIC32ExtPhySMSC8700.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/Delay.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/SPIFlash.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/DNSs.c</itemPath>
@@ -170,7 +167,6 @@
         <itemPath>../Microchip/TCPIP Stack/DNS.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/ICMP.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/ETHPIC32IntMac.c</itemPath>
-        <itemPath>../Microchip/TCPIP Stack/ETHPIC32ExtPhyDP83640.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/ETH97J60.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/Helpers.c</itemPath>
         <itemPath>../Microchip/TCPIP Stack/ZeroconfLinkLocal.c</itemPath>
@@ -192,7 +188,9 @@
       <itemPath>../main.c</itemPath>
       <itemPath>../MyTFTP.c</itemPath>
       <itemPath>../Settings.c</itemPath>
-      <itemPath>HodoCrate.c</itemPath>
+      <itemPath>../HodoCrate.c</itemPath>
+      <itemPath>../BerkeleyTCPServerDemo.c</itemPath>
+      <itemPath>../PingDemo.c</itemPath>
     </logicalFolder>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
@@ -246,7 +244,7 @@
         <property key="enable-unroll-loops" value="false"/>
         <property key="exclude-floating-point" value="false"/>
         <property key="extra-include-directories"
-                  value="../Microchip/Include;../Microchip/Include/TCPIP Stack;.."/>
+                  value="../Microchip/Include;../Microchip/Include/TCPIP Stack;..;../Microchip/Include/peripheral"/>
         <property key="generate-16-bit-code" value="false"/>
         <property key="isolate-each-function" value="false"/>
         <property key="make-warnings-into-errors" value="false"/>
@@ -298,6 +296,7 @@
         <property key="symbol-stripping" value=""/>
         <property key="trace-symbols" value=""/>
         <property key="warn-section-align" value="false"/>
+        <appendMe value="-Os"/>
       </C32-LD>
       <C32Global>
         <property key="legacy-libc" value="false"/>

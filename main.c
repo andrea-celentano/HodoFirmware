@@ -90,11 +90,7 @@
  */
 #define THIS_IS_STACK_APPLICATION
 
-#ifdef HPS
-#define FIRMWARE_REV "1.3"
-#else
-#define FIRMWARE_REV "1.7"
-#endif
+#define FIRMWARE_REV "1.0"
 
 
 // Configuration Bits
@@ -128,8 +124,8 @@
 #include "TFTPc.h"
 #include <string.h> //for memset
 
-//Define here the structure that holds info about the LED monitor system
-LedMonitor *MyLedMonitor;
+//Define here the structure that holds info about the HodoCrate
+HodoCrate *MyHodoCrate;
 //Define here the structure that contains the settings, read from the FLASH
 Settings FirmSettings,CurSettings;
 
@@ -148,8 +144,7 @@ BYTE AN0String[8];
 // These may or may not be present in all applications.
 static void InitAppConfig(void);
 static void InitializeBoard(void);
-static void ProcessI2C(LedMonitor *MyLedMonitor);
-static void Decode(int length,char* str,LedMonitor* MyLedMonitor);
+static void Decode(int length,char* str,HodoCrate* MyHodoCrate);
 
 
 
@@ -235,21 +230,17 @@ int main(void)
    
         //THIS IS THE INSTRUCTION TO INIT THE MAIN I2C BUS
         I2CMainInit();
-        //before starting with the LOOP, turn OFF the system @TODO
-        if (I2CTransmitOneByteToAddress(0x0,I2C_CLK_MGR)) {
-            turn_system_on_off(FALSE);
-        }
+       
 
-
-        //Init the LED board structure
+        //Init the HodoCrate
         int ret=1;
-        MyLedMonitor=InitLedMonitor(MyLedMonitor);
-        if (MyLedMonitor==NULL){
+        MyHodoCrate=InitHodoCrate();
+        if (MyHodoCrate==NULL){
             DBPRINTF("Error initialization structure MyLedMonitor\n");
             while(1); //stop here
         }
         //load default values
-        ret=LoadDefaultLedMonitor(MyLedMonitor);
+        ret=LoadDefaultHodoCrate(MyHodoCrate);
      
         // Initialize Stack and application related NV variables into AppConfig.
 	InitAppConfig();
@@ -494,11 +485,8 @@ concorrent_loop:
 
                 if (doTFTP!=DO_NONE){
                     switch (doTFTP){
-                        case DO_LED_DATA:
+                        case DO_HODO_DATA:
                               MyTFTPClient(FirmSettings.DataFileName,FirmSettings.data_srv,Data,&nData);
-                              break;
-                        case DO_LED_SEQUENCE:
-                              MyTFTPClient(FirmSettings.SequenceFileName,FirmSettings.data_srv,Data,&nData);
                               break;
                         default:
                               break;
@@ -512,13 +500,13 @@ concorrent_loop:
                             doTFTP=DO_NONE;
                             break;
                         case TFTP_DOWNLOAD_COMPLETE:
-                            if (doTFTP==DO_LED_DATA){
-                                 sprintf(str,"Decode data\n");
-                                 DecodeLedData(MyLedMonitor,Data,nData,str);
+                            if (doTFTP==DO_HODO_DATA){
+                                 sprintf(str,"Decode hodo data\n");
+                                // DecodeLedData(MyLedMonitor,Data,nData,str);
                             }
-                            else if  (doTFTP==DO_LED_SEQUENCE){
+                            else if  (0){
                                     sprintf(str,"Decode sequence\n");
-                                    DecodeLedSequence(MyLedMonitor,Data,nData,str);
+                                //    DecodeLedSequence(MyLedMonitor,Data,nData,str);
                             }
                             smDOWNLOAD=TFTP_DOWNLOAD_RESOLVE_IP;
                             doTFTP=DO_NONE;
@@ -542,12 +530,11 @@ concorrent_loop:
                 #endif
                 //we got something!
                 if (length>0){
-                    Decode(length,str,MyLedMonitor); //this clears str if nothing to transmit, or put something in.
+                    Decode(length,str,MyHodoCrate); //this clears str if nothing to transmit, or put something in.
                 }
                 else strcpy(str,""); //THE NULL-TERMINATING STRING
 
-		if (MyLedMonitor->status==TRUE) ProcessI2C(MyLedMonitor); //ALWAYS if on, for sequences!
-
+		
                     
 
 	} //end of while(1) loop, concurrent tasks!
@@ -559,9 +546,9 @@ concorrent_loop:
  * This is the function that converts the string with the command to a proper modification of the LedMonitor structure
  * @param length The lenght of the string with the command
  * @param str The string with the command
- * @param MyLedMonitor The pointer to the LedMonitor structure
+ * @param MyHodoCrate The pointer to the HodoCrate structure
  */
-static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
+static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
 
 
     static char delim=' ';
@@ -599,16 +586,6 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
 
         //RESET The BOARD
         if ((strcmp(token[0],"RESET")==0)||(strcmp(token[0],"REBOOT")==0)) Reset();
-        else if (strcmp(token[0],"LOAD_SEQUENCE")==0) {
-            if (FirmSettings.data_srv.Val==(unsigned long)0x00) strcpy(str,"SET DATA SERVER IP\n");
-            else if (FirmSettings.SequenceFileName[0]=='\n')  strcpy(str,"SET SEQUENCE FILE NAME\n");
-            else  {
-                sprintf(str,"Load %s from %i.%i.%i.%i \n",FirmSettings.SequenceFileName,FirmSettings.data_srv.v[0],FirmSettings.data_srv.v[1],FirmSettings.data_srv.v[2],FirmSettings.data_srv.v[3]);
-                memset((void*)Data,0,nData); //clear the data before!
-                nData=0;
-                doTFTP=DO_LED_SEQUENCE;
-            }
-        }
         else if (strcmp(token[0],"LOAD_DATA")==0) {
             if (FirmSettings.data_srv.Val==(unsigned long)0x00) strcpy(str,"SET DATA SERVER IP\n");
             else if (FirmSettings.DataFileName[0]=='\n') strcpy(str,"SET DATA FILE NAME\n");
@@ -616,7 +593,7 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
                 sprintf(str,"Load %s from %i.%i.%i.%i \n",FirmSettings.DataFileName,FirmSettings.data_srv.v[0],FirmSettings.data_srv.v[1],FirmSettings.data_srv.v[2],FirmSettings.data_srv.v[3]);
                 memset((void*)Data,0,nData); //clear the data before!
                 nData=0;
-                doTFTP=DO_LED_DATA;
+                doTFTP=DO_HODO_DATA;
                 }
             }
          /*else if (strcmp(token[0],"PRINT_FIRMWARE_SETTINGS")==0) {
@@ -632,26 +609,16 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
          }
         else if (strcmp(token[0],"TURN")==0){     //Turn ON-OFF the WHOLE system
         if (strcmp(token[1],"ON")==0){
-            if (MyLedMonitor->status==FALSE){
-                MyLedMonitor->status=TRUE;
-                MyLedMonitor->statusChanged=TRUE;
-                turn_system_on_off(TRUE);
+            if (MyHodoCrate->status==FALSE){
+                MyHodoCrate->status=TRUE;
+                turn_system_on_off(TRUE,MyHodoCrate);
                 }
-            else  MyLedMonitor->statusChanged=FALSE;
         }
         else if  (strcmp(token[1],"OFF")==0){
-        if (MyLedMonitor->status==TRUE){
-             MyLedMonitor->status=FALSE;
-             MyLedMonitor->statusChanged=TRUE;
-             /*In this case, also clean the LED bits, all boards*/
-
-             for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-                  MyLedMonitor->LedStatus_low[ii]=0x00000000;
-                  MyLedMonitor->LedStatus_high[ii]=0x00000000;
-             }
-             turn_system_on_off(FALSE); /*Turn off*/
+        if (MyHodoCrate->status==TRUE){
+             MyHodoCrate->status=FALSE;  
+             turn_system_on_off(FALSE,MyHodoCrate); /*Turn off*/
         }
-         else  MyLedMonitor->statusChanged=FALSE;
        }
     } //end "TURN"
     else if (strcmp(token[0],"SET")==0){
@@ -711,20 +678,12 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
             strcpy(FirmSettings.DataFileName,token[2]);
             WriteSettingsToFlash(&FirmSettings);
         }
-        else if (strcmp(token[1],"SEQUENCE_FILE_NAME")==0){
-            strcpy(FirmSettings.SequenceFileName,token[2]);
-            WriteSettingsToFlash(&FirmSettings);
-        }
         
-        else if (strcmp(token[1],"OWR")==0){ //owerwrite mode
-                if (strcmp(token[2],"1")==0) MyLedMonitor->owr=TRUE;
-                else if (strcmp(token[2],"0")==0) MyLedMonitor->owr=FALSE;
-                }
-            else if ((strcmp(token[1],"AMPL")==0)|| (strcmp(token[1],"AMPLITUDE")==0)){
+         else if ((strcmp(token[1],"AMPL")==0)|| (strcmp(token[1],"AMPLITUDE")==0)){
                 if (Nwords==4){
                     ch=atoi(token[2]);
                     uStmp=atoi(token[3]);
-                    ChangeAmplitude(ch,uStmp,MyLedMonitor); //This triggers also LEDChanged. TODO: get the return code and check it
+                    SetAmplitude(ch,uStmp,MyHodoCrate); //This triggers also LEDChanged. TODO: get the return code and check it
                     }
                 else{
                     sprintf(str,"ERROR SET AMPL\n");
@@ -734,316 +693,48 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
         else if ((strcmp(token[1],"AMPL_ALL")==0)|| (strcmp(token[1],"AMPLITUDE_ALL")==0)){
                 if (Nwords==3){                
                     uStmp=atoi(token[2]);
-                    ChangeAmplitude(CH_CALL_ALL,uStmp,MyLedMonitor); //This triggers also LEDChanged. TODO: get the return code and check it
+                    SetAmplitudeAll(uStmp,MyHodoCrate); //This triggers also LEDChanged. TODO: get the return code and check it
                 }
                 else{
                     //TODO: ERROR HERE
                 }    
-            }//end AMPLITUDE_ALL aa
-            else if (strcmp(token[1],"WIDTH")==0){
-                if (Nwords==4){
-                    ch=atoi(token[2]);
-                    uStmp=atoi(token[3]);
-                    ChangeWidth(ch,uStmp,MyLedMonitor); //This triggers also LEDChanged if the LED is ON. TODO: get the return code and check it
-                }
-                else{
-                    //TODO: ERROR HERE
-                }
-               }   //end WIDTH
-            else if (strcmp(token[1],"WIDTH_ALL")==0){
-                if (Nwords==3){
-                    uStmp=atoi(token[2]);
-                    ChangeWidth(CH_CALL_ALL,uStmp,MyLedMonitor); //This triggers also LEDChanged. TODO: get the return code and check it
-                }
-                else{
-                    //TODO: ERROR HERE
-                }
-            }//end AMPLITUDE_ALL
-
-            else if (strcmp(token[1],"DATA")==0){ //SET DATA n ID1 AMPL1 WIDTH1 ... IDN AMPLN WIDTHN
+            }//end AMPLITUDE_ALL 
+            else if (strcmp(token[1],"DATA")==0){ //SET DATA n ID1 AMPL1 IDN AMPLN
                 if ((Nwords>3) && ((Nwords-3)%3==0)){
                     uStmp=atoi(token[2]); //how many channels
-                    if ((Nwords-3)==(3*uStmp)){
+                    if ((Nwords-3)==(2*uStmp)){
                         for (ii=0;ii<uStmp;ii++){
-                            ch=atoi(token[3+ii*3]);
-                            uStmp1=atoi(token[3+ii*3+1]);
-                            uStmp2=atoi(token[3+ii*3+2]);
-                            ChangeAmplitude(ch,uStmp1,MyLedMonitor);
-                            ChangeWidth(ch,uStmp2,MyLedMonitor);
+                            ch=atoi(token[3+ii*2]);
+                            uStmp1=atoi(token[3+ii*2+1]);
+                            SetAmplitude(ch,uStmp1,MyHodoCrate);
                          }
                     }
                 }
             } //end SET DATA
-             else if (strcmp(token[1],"CLK")==0){
-                 if (strcmp(token[2],"INT")==0){
-                     MyLedMonitor->FT_clk_src=INT_CLK;
-                     MyLedMonitor->clkChanged=TRUE;
-                 }
-                 else if (strcmp(token[2],"EXT")==0){
-                     MyLedMonitor->FT_clk_src=EXT_CLK;
-                     MyLedMonitor->clkChanged=TRUE;
-                 }
-             }//end CLK
-             else if ((strcmp(token[1],"FREQ")==0)||(strcmp(token[1],"FREQUENCY")==0)){
-                 if (Nwords==3){
-                    Itmp=atoi(token[2]);
-                    MyLedMonitor->FT_int_frequency=Itmp;
-                    MyLedMonitor->clkChanged=TRUE;
-                 }
-                 else{
-                    //TODO: error
-                 }
-             }//end FREQ
-             else if ((strcmp(token[1],"CLK")==0)|| (strcmp(token[1],"CLOCK")==0)){
-               if  (strcmp(token[2],"INT")==0){
-                  MyLedMonitor->FT_clk_src=INT_CLK;
-                  MyLedMonitor->clkChanged=TRUE;
-               }
-               else if (strcmp(token[2],"EXT")==0){
-                    MyLedMonitor->FT_clk_src = EXT_CLK;
-                    MyLedMonitor->clkChanged= TRUE;
-               }
-               else strcpy(str,"NOT RECOGNIZED. USE: SET CLK INT / SET CLK EXT\n");
-             } //end "SET CLK"
-
-
-#ifdef HPS
-             else if ((strcmp(token[1],"COLOR")==0)||(strcmp(token[1],"COL")==0)){
-                 if ((strcmp(token[2],"B")==0)|| (strcmp(token[2],"BLUE")==0)){ //BLUE
-                     MyLedMonitor->color=BLUE;
-                     MyLedMonitor->colorChanged=TRUE;
-                 }
-                 else if ((strcmp(token[2],"R")==0)|| (strcmp(token[2],"RED")==0)){ //RED
-                     MyLedMonitor->color=RED;
-                     MyLedMonitor->colorChanged=TRUE;
-                 }
-             }
-#endif
-//Here starts the very expert commands to set the sequence without the TFTP server and the file
-         else if (strcmp(token[1],"N_SEQUENCE_REPETITIONS")==0){
-          Itmp=atoi(token[2]);
-          if (Itmp>=-1) MyLedMonitor->MySequence.Nrepetitions=Itmp;
-          else strcpy(str,"Bad Repetion number. Must be >=-1 \n");
-         }
-         else if (strcmp(token[1],"N_SEQUENCE_STEPS")==0){
-          Itmp=atoi(token[2]);
-          if ((Itmp>0)&&(Itmp<=SEQ_MAX_STEPS)) MyLedMonitor->MySequence.Nsteps=Itmp;
-          else sprintf(str,"Bad number of steps. Must be >0 and <= %i \n",SEQ_MAX_STEPS);
-         }
-          else if ((strcmp(token[1],"SEQUENCE_STEP")==0)){
-          id=atoi(token[2]);
-          if ((id>=0)&&(id< MyLedMonitor->MySequence.Nsteps)){
-              Itmp=atoi(token[3]); //number of LEDs
-              if ((Itmp>0)&&(Itmp <= DFLT_NMBR_OF_BOARDS)) {
-                   MyLedMonitor->MySequence.NledsThisStep[id]=Itmp;
-                   Itmp2=atoi(token[4]); //time
-                   MyLedMonitor->MySequence.TimeThisStep[id]=Itmp2;
-                   for (ii=0;ii<Itmp;ii++){
-                      ch=atoi(token[5+ii]);
-                      if ((ch>=-1)&&(ch<DFLT_NMBR_OF_CH)) MyLedMonitor->MySequence.IDledsThisStep[id][ii]=ch;
-                      else sprintf(str,"Bad LED ID. Must be >=-1 and < %i \n",DFLT_NMBR_OF_CH);
-                   }
-              }
-              else sprintf(str,"Bad number of LEDs. Must be >0 and <= %i \n",DFLT_NMBR_OF_BOARDS);
-          }
-          else sprintf(str,"Bad step  number. Must be >=0 and < %i \n",MyLedMonitor->MySequence.Nsteps);
-         }
-         else if (strcmp(token[1],"SEQUENCE_DONE")==0){
-                MyLedMonitor->MySequence.curStep=-1;
-                MyLedMonitor->MySequence.curRepetition=0;
-                MyLedMonitor->MySequence.isConfigured=TRUE;
-          }
-
-//Here starts the very expert commands to set the scan without the TFTP server and the file
-        else if (strcmp(token[1],"SCAN_TON")==0){
-            Itmp=atoi(token[2]);
-            if (Itmp> 0) MyLedMonitor->MyScan.Ton=Itmp;
-            else strcpy(str,"Bad Ton. Must be > 0 \n");
-         }
-        else if (strcmp(token[1],"SCAN_TOFF")==0){
-            Itmp=atoi(token[2]);
-            if (Itmp> 0) MyLedMonitor->MyScan.Toff=Itmp;
-            else strcpy(str,"Bad Toff. Must be > 0 \n");
-         }
-        else if (strcmp(token[1],"SCAN_LED")==0){
-            Itmp=atoi(token[2]);
-            if ((Itmp>= 0) && (Itmp<DFLT_NMBR_OF_CH)){
-                Itmp2=token[3]; //nSteps
-                uStmp=token[4]; //min
-                uStmp1=token[5]; //delta
-                uStmp2=uStmp+(Itmp2-1)*uStmp1; //max
-
-                if ((uStmp<0)||(uStmp>=4096)) strcpy(str,"Bad min, must be between 0 and 4095");
-                else if (uStmp1<=0) strcpy(str,"Bad delta, must be >0");
-                else if (Itmp2<0) strcpy(str,"Bad nsteps, must be >0");
-                else if (uStmp2>=4096){
-                     strcpy(str,"Too many nsteps, max must be < 4096. Readjusting");
-                     Itmp2=(4096-uStmp)/uStmp1;
-                }
-                else if (Itmp2==0){ //disable this LED for scan
-
-                  MyLedMonitor->MyScan.n_steps[Itmp]=0;
-                  Itmp2=GetBoard(Itmp);
-                  Itmp=GetIdInBoard(Itmp);
-
-                  if (Itmp<32){
-                      uint32tmp=(1<<Itmp);
-                      uint32tmp=(~uint32tmp)&0xffffffff;
-                      MyLedMonitor->MyScan.LedStatus_low[Itmp2]=MyLedMonitor->MyScan.LedStatus_low[Itmp2]&uint32tmp;
-                  }
-                  else{
-                      Itmp=Itmp-32;
-                      uint32tmp=(1<<Itmp);
-                      uint32tmp=(~uint32tmp)&0xffffffff;
-                      MyLedMonitor->MyScan.LedStatus_high[Itmp2]=MyLedMonitor->MyScan.LedStatus_high[Itmp2]&uint32tmp;
-                  }
-                }
-                else{
-                    MyLedMonitor->MyScan.AmplitudeLow[Itmp]=uStmp;
-                    MyLedMonitor->MyScan.AmplitudeDelta[Itmp]=uStmp;
-                    MyLedMonitor->MyScan.n_steps[Itmp]=Itmp2;
-                    Itmp2=GetBoard(Itmp);
-                    Itmp=GetIdInBoard(Itmp);
-                    if (Itmp<32){
-                        MyLedMonitor->MyScan.LedStatus_low[Itmp2]|=(1<<Itmp);                 
-                    }
-                    else{
-                        Itmp=Itmp-32;
-                        MyLedMonitor->MyScan.LedStatus_high[Itmp2]|=(1<<Itmp);
-                    }
-                }
-            }
-            else strcpy(str,"Bad LED id. Must be >= 0 && <= DFLT_NMBR_OF_CH \n");
-         }
-
-
         }//end "SET" commands
 
-         else if (strcmp(token[0],"START_SCAN")==0){
-          if (MyLedMonitor->status==FALSE) strcpy(str,"SYSTEM IS OFF\n");
-            else if (MyLedMonitor->MyScan.isOn) strcpy(str,"ALREADY RUNNING\n");
-            else if (MyLedMonitor->MySequence.isOn) strcpy(str,"SEQUENCE IS ON. STOP IT BEFORE\n");
-            else {
-                  /*When we start a scan, ALL the LEDs arrays must be set to 0*/
-                    int qq=0;
-                    for (qq=0;qq<DFLT_NMBR_OF_BOARDS;qq++){
-                        MyLedMonitor->LedStatus_low[qq]=0x00000000;
-                        MyLedMonitor->LedStatus_high[qq]=0x00000000;
-                     }
-                    MyLedMonitor->MyScan.curGroup=-1;
-                    MyLedMonitor->MyScan.curStep=-1;
-                    MyLedMonitor->MyScan.isOn=TRUE;
+        else if (strcmp(token[0],"UPDATE")==0) {
+            if (MyHodoCrate->status==FALSE){
+                sprintf(str,"First TURN ON THE SYTEM");
             }
-         }//end start scan
-        else if (strcmp(token[0],"START_SEQUENCE")==0){
-            if (MyLedMonitor->status==FALSE) strcpy(str,"SYSTEM IS OFF\n");
-            else if ((Nwords==2)&&(strcmp(token[1],"DC"))==0){
-                    memcpy(&(MyLedMonitor->BackupSequence),&(MyLedMonitor->MySequence),sizeof(MyLedMonitor->MySequence));
-                    InitLEDSequence(&(MyLedMonitor->MySequence),TRUE);
-                    MyLedMonitor->MySequence.isOn=TRUE;
-                    /*When we start a sequence, ALL the LEDs arrays must be set to 0*/
-                    int qq;
-                    for (qq=0;qq<DFLT_NMBR_OF_BOARDS;qq++){
-                        MyLedMonitor->LedStatus_low[qq]=0x00000000;
-                        MyLedMonitor->LedStatus_high[qq]=0x00000000;
-                     }
+            else if (Nwords==2){
+                ch=atoi(token[1]);
+                UpdateOutput(ch,MyHodoCrate);
             }
-            else if (!(MyLedMonitor->MySequence.isConfigured)) strcpy(str,"FIRST INIT SEQUENCE\n");
-            else if (MyLedMonitor->MySequence.isOn) strcpy(str,"ALREADY RUNNING\n");
-            else if (MyLedMonitor->MyScan.isOn) strcpy(str,"SCAN IS ON. STOP IT BEFORE\n");
-            else {
-                  /*When we start a sequence, ALL the LEDs arrays must be set to 0*/
-                    int qq=0;
-                    for (qq=0;qq<DFLT_NMBR_OF_BOARDS;qq++){
-                        MyLedMonitor->LedStatus_low[qq]=0x00000000;
-                        MyLedMonitor->LedStatus_high[qq]=0x00000000;
-                     }
-                    MyLedMonitor->MySequence.isOn=TRUE;
+        } //end UPDATE
+        else if (strcmp(token[0],"UPDATE_ALL")==0){
+            if (MyHodoCrate->status==FALSE){
+                sprintf(str,"First TURN ON THE SYTEM");
             }
-        }//end "START SEQUENCE"
-        else if (strcmp(token[0],"STOP_SEQUENCE")==0){
-            if (MyLedMonitor->status==FALSE) strcpy(str,"SYSTEM IS OFF\n");
-            else if (!MyLedMonitor->MySequence.isOn) strcpy(str,"SEQUENCE IS NOT RUNNING\n");
-            else {
-                /*Also turn off the LEDs*/
-                for (ii=0;ii<MyLedMonitor->MySequence.NledsThisStep[MyLedMonitor->MySequence.curStep];ii++){
-                    id=MyLedMonitor->MySequence.IDledsThisStep[MyLedMonitor->MySequence.curStep][ii];
-                    if (MyLedMonitor->MySequence.isMultiDC==TRUE) {
-                         turn_on_off(id+0*DFLT_CH_PER_BOARD/4,id+1*DFLT_CH_PER_BOARD/4,id+2*DFLT_CH_PER_BOARD/4,id+3*DFLT_CH_PER_BOARD/4,0,MyLedMonitor->color,0,0);
-                    }
-                    else {
-                            turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,0,MyLedMonitor->color,0,0);
-                        }
-                    }
-
-                if (MyLedMonitor->MySequence.isMultiDC==TRUE)   memcpy(&(MyLedMonitor->MySequence),&(MyLedMonitor->BackupSequence),sizeof(MyLedMonitor->MySequence));
-
-                MyLedMonitor->MySequence.isOn=FALSE;
-                MyLedMonitor->MySequence.curStep=-1;
-                MyLedMonitor->MySequence.curRepetition=0;
-            }
-        }//end "STOP SEQUENCE"
-        else if (strcmp(token[0],"SWITCH")==0) {
-            if (MyLedMonitor->status==FALSE) strcpy(str,"SYSTEM IS OFF\n");
-            else if (MyLedMonitor->MySequence.isOn) strcpy(str,"STOP SEQUENCE BEFORE\n");
-            else if (Nwords==3){
-                ch=atoi(token[2]);
-                board=GetBoard(ch);
-
-                if (strcmp(token[1],"ON")==0) Btmp=TRUE;
-                else if (strcmp(token[1],"OFF")==0) Btmp=FALSE;
-                
-                //we touch the channel if
-                //1-The channel is ON and we need it OFF
-                if (isLedOn(ch,MyLedMonitor)&&(Btmp==FALSE)){
-                       MyLedMonitor->LEDChanged=TRUE;
-                       MyLedMonitor->LedToChange=ch;
-                       MyLedMonitor->LedToChange2=-1;
-                       MyLedMonitor->LedStatus_low[board]=0; //Fine, SWITCH can result at maximum in ONE led on per board
-                       MyLedMonitor->LedStatus_high[board]=0; //Therefore SWITCH OFF will have the board completely off
-                }
-                //2-The channel is OFF, we need it ON, there are NO other channels ON in the board
-                else if(!isLedOn(ch,MyLedMonitor)&&(Btmp==TRUE)&&(!hasBoardOneLEDOn(board,MyLedMonitor))){
-                       MyLedMonitor->LEDChanged=TRUE;
-                       MyLedMonitor->LedToChange=ch;
-                       MyLedMonitor->LedToChange2=-1;
-                       ch=GetIdInBoard(ch);
-                       if (ch<32){
-                           MyLedMonitor->LedStatus_low[board]=((0x1)<<ch);
-                           MyLedMonitor->LedStatus_high[board]=0;
-                        }
-                        else {
-                          MyLedMonitor->LedStatus_low[board]=0;
-                          MyLedMonitor->LedStatus_high[board]=((0x1)<<(ch-32));
-                        }
-                }
-                //3-The channel is OFF, we need it ON, there is another channel ON, there is OWR
-                 else if(!isLedOn(ch,MyLedMonitor)&&(Btmp==TRUE)&&(hasBoardOneLEDOn(board,MyLedMonitor))&&(MyLedMonitor->owr==TRUE)){
-                       MyLedMonitor->LEDChanged=TRUE;
-                       MyLedMonitor->LedToChange=ch;
-                       MyLedMonitor->LedToChange2=getBoardLEDOn(board,MyLedMonitor);
-                       MyLedMonitor->LedToChange2+=board*DFLT_CH_PER_BOARD;
-                       ch=GetIdInBoard(ch);
-                       if (ch<32){
-                           MyLedMonitor->LedStatus_low[board]=((0x1)<<ch);
-                           MyLedMonitor->LedStatus_high[board]=0;
-                        }
-                        else {
-                          MyLedMonitor->LedStatus_low[board]=0;
-                          MyLedMonitor->LedStatus_high[board]=((0x1)<<(ch-32));
-                        }
-                }
             else{
-                //TODO: error code
+                UpdateOutputAll(MyHodoCrate);
             }
-            }//end nwords==3
-        }//end "SWITCH" commands
-        
+        } //end UPDATE_ALL
            //here starts the "GET" commands.
             //These modifies the str buffer!
        else if (strcmp(token[0],"GET")==0) {
            if (strcmp(token[1],"STATUS")==0){
-            if  (MyLedMonitor->status==TRUE) strcpy(str,"ON\n");
+            if  (MyHodoCrate->status==TRUE) strcpy(str,"ON\n");
             else strcpy(str,"OFF\n");
            }
            else if (strcmp(token[1],"IP")==0){
@@ -1067,44 +758,10 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
            else if (strcmp(token[1],"SEQUENCE_FILE_NAME")==0){
                  sprintf(str,"%s \n",CurSettings.SequenceFileName);
            }
-           else if ((strcmp(token[1],"CLK")==0)|| (strcmp(token[1],"CLOCK")==0)){
-               if  (MyLedMonitor->FT_clk_src==INT_CLK) strcpy(str,"INTERNAL CLOCK\n");
-               else strcpy(str,"EXTERNAL CLOCK\n");
-           } //end "GET CLK"
-          else if ((strcmp(token[1],"FREQ")==0)|| (strcmp(token[1],"FREQUENCY")==0)){
-        //       if  (MyLedMonitor->FT_clk_src==EXT_CLK) strcpy(str,"EXT CLOCK\n");
-              if (0){1;}
-               else switch(MyLedMonitor->FT_int_frequency){
-                   case (F_8KHz):
-                   strcpy(str,"8000 Hz\n");
-                   break;
-                   case (F_4KHz):
-                   strcpy(str,"4000 Hz\n");
-                   break;
-                   case (F_2KHz):
-                   strcpy(str,"2000 Hz\n");
-                   break;
-                   case (F_1KHz):
-                   strcpy(str,"1000 Hz\n");
-                   break;
-                   case (F_500Hz):
-                   strcpy(str,"500 Hz\n");
-                   break;
-                   case (F_250Hz):
-                   strcpy(str,"250 Hz\n");
-                   break;
-                   case (F_125Hz):
-                   strcpy(str,"125 Hz\n");
-                   break;
-                   case (F_62Hz):
-                   strcpy(str,"62.5 Hz\n");
-                   break;
-               }
-           }//end "FREQ"
           else if(strcmp(token[1],"AMPL")==0){
                if (Nwords==3){
                 ch=atoi(token[2]);
-                uStmp=GetAmplitude(ch,MyLedMonitor);
+                uStmp=GetAmplitude(ch,MyHodoCrate);
                 sprintf(str,"%i\n",uStmp);
                }
                else {
@@ -1114,326 +771,32 @@ static void Decode(int length,char* str,LedMonitor* MyLedMonitor){
             else if (strcmp(token[1],"AMPL_ALL")==0){
             sprintf(&str[strlen(str)],"%i ",DFLT_NMBR_OF_CH);
             for (ii=0;ii<DFLT_NMBR_OF_CH;ii++){
-              uStmp=GetAmplitude(ii,MyLedMonitor);
+              uStmp=GetAmplitude(ii,MyHodoCrate);
               sprintf(&str[strlen(str)],"%i ",uStmp);
           }
           sprintf(&str[strlen(str)],"\n");
         } //end GET WIDTH_ALL
-        else if(strcmp(token[1],"WIDTH")==0){
-               if (Nwords==3){
-                ch=atoi(token[2]);
-                uStmp=GetWidth(ch,MyLedMonitor);
-                sprintf(str,"%i\n",uStmp);
-               }
-               else {
-                   //TODO: error
-               }
-          }//end "GET WIDTH"
-        else if (strcmp(token[1],"WIDTH_ALL")==0){
-          sprintf(&str[strlen(str)],"%i ",DFLT_NMBR_OF_CH);
-          for (ii=0;ii<DFLT_NMBR_OF_CH;ii++){
-              uStmp=GetWidth(ii,MyLedMonitor);
-              sprintf(&str[strlen(str)],"%i ",uStmp);
-          }
-          sprintf(&str[strlen(str)],"\n");
-        } //end GET WIDTH_ALL
-        else if (strcmp(token[1],"SEQUENCE")==0){
-            if (MyLedMonitor->MySequence.isOn==FALSE) strcpy(str,"SEQUENCE OFF\n");
-            else {
-                    int step=MyLedMonitor->MySequence.curStep;
-                    int ii;
-                    sprintf(str,"SEQUENCE ON.\n Step%i Rep%i.\n N LEDs ON: %i\n",step,MyLedMonitor->MySequence.curRepetition,MyLedMonitor->MySequence.NledsThisStep[step]);
-                    for (ii=0;ii<MyLedMonitor->MySequence.NledsThisStep[step];ii++){
-                        sprintf(&str[strlen(str)],"LED %i: %i\n",ii,MyLedMonitor->MySequence.IDledsThisStep[step][ii]);
-                    }
-            }
-        } //end "GET SEQUENCE"
-        else if (strcmp(token[1],"LED_STATUS")==0) {
-             if (Nwords==3){
-                ch=atoi(token[2]);
-                if(isLedOn(ch,MyLedMonitor)){
-                    sprintf(str,"1\n");
-                }
-                else sprintf(str,"0\n");
-               }
-        }   //end GET LED_STATUS
-        else if (strcmp(token[1],"LED_STATUS_ALL")==0){
-            for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-                Itmp=getBoardLEDOn(ii,MyLedMonitor);
-                if (Itmp!=-1) Itmp+=ii*DFLT_CH_PER_BOARD;
-                   sprintf(&str[strlen(str)],"%i ",Itmp);
-            }
-            sprintf(&str[strlen(str)],"\n");
-        } //end GET LED_STATUS_ALL
-         else if (strcmp(token[1],"OWR")==0){
-              sprintf(str,"%i\n",MyLedMonitor->owr);
-         } //end GET OWR
-#ifdef HPS
-       else if ((strcmp(token[1],"COLOR")==0)||(strcmp(token[1],"COL")==0)){
-                 if (MyLedMonitor->color==BLUE){ //BLUE
-                      sprintf(str,"BLUE\n");
-                 }
-                 else sprintf(str,"RED\n");
-             }
-#endif
        else if (strcmp(token[1],"FIRMWARE")==0){
                sprintf(str,"%s \n",FIRMWARE_REV);
         }
-       }//end "GET" commands
+       else if (strcmp(token[1],"TEMPERATURE")==0){
+           if (MyHodoCrate->status==FALSE){
+               sprintf(str,"First TURN ON the system\n");
+           }
+           else if (Nwords==3){
+                    ch=atoi(token[2]); //this is the board actually!
+                    Itmp=ReadTemperature(ch,MyHodoCrate);
+                    sprintf(str,"%i \n",Itmp);
+                 }
+       }
+      }//end "GET" commands
        else  if (Nwords) {
           sprintf(str,"BAD COMMAND\n");
        }//end last case
     if (Nwords) free(token);
     return;
 }
-/**
- *This is the function that, given the LedMonitor structure, interacts trough I2C with the system
- * It is the only function in the program actually allowed to work with I2C!
- * @param MyLedMonitor
- */
-static void ProcessI2C(LedMonitor *MyLedMonitor)
-{
 
-    static DWORD t2=0; /*static means: t2=0 only at first*/
-    DWORD dt;
-    int ii,id,bd;
-    int max_step;
-    short amplitude;
-    if (MyLedMonitor->statusChanged){ //the status of the system has changed, ON/OFF -> OFF/ON
-        LED1_IO=MyLedMonitor->status; //use LED 1 for the system status
-        turn_system_on_off(MyLedMonitor->status); //process the new status //TODO: GET ERROR CODE
-        MyLedMonitor->statusChanged=FALSE; //set status changed to FALSE.
-#if defined(PIC32_STARTER_KIT)
-        DBPRINTF("Changed status done\n");
-#endif
-    }
-    if (MyLedMonitor->clkChanged){
-        sel_clk(MyLedMonitor->FT_clk_src,MyLedMonitor->FT_int_frequency); //TODO: GET ERROR CODE
-        MyLedMonitor->clkChanged=FALSE;
-    }
-    if (MyLedMonitor->MySequence.isOn){ /*If the sequence is ON*/
-
-        if (MyLedMonitor->MySequence.curStep==-1)  dt=0;
-        else dt=MyLedMonitor->MySequence.TimeThisStep[MyLedMonitor->MySequence.curStep];
-
-        dt*=2*TICK_SECOND/2ul;
-
-        if (MyLedMonitor->MySequence.curStep==-1) { /*First step*/
-        /*  Turn OFF all the LEDs*/
-            for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-                if (hasBoardOneLEDOn(ii,MyLedMonitor)){
-                    id=getBoardLEDOn(ii,MyLedMonitor);
-                    id=id+ii*DFLT_CH_PER_BOARD;
-                    turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,0,0);
-                    }
-                MyLedMonitor->LedStatus_low[ii]=0x0;
-                MyLedMonitor->LedStatus_high[ii]=0x0;
-            }
-            /*Init the sequence*/
-             t2=TickGet();
-             MyLedMonitor->MySequence.curStep++;
-             for (ii=0;ii<MyLedMonitor->MySequence.NledsThisStep[MyLedMonitor->MySequence.curStep];ii++){
-                 id=MyLedMonitor->MySequence.IDledsThisStep[MyLedMonitor->MySequence.curStep][ii];
-                 if (MyLedMonitor->MySequence.isMultiDC){ //THE ONLY CASE WITH MORE THAN 1 LED ON PER BOARD
-                       turn_on_off(id+0*DFLT_CH_PER_BOARD/4,id+1*DFLT_CH_PER_BOARD/4,id+2*DFLT_CH_PER_BOARD/4,id+3*DFLT_CH_PER_BOARD/4,TRUE,MyLedMonitor->color,MyLedMonitor->Amplitude[id],DC_WIDTH);
-                 }
-                 else if (id==BLANK_CH) {
-                     Nop();
-                 }
-                 else {
-                      turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,TRUE,MyLedMonitor->color,MyLedMonitor->Amplitude[id], MyLedMonitor->Width[id]);
-                 }
-                }
-               //TEMPORARY WORK AROUND DUE TO I2C BUS CONFLICT:
-                sel_clk(MyLedMonitor->FT_clk_src,MyLedMonitor->FT_int_frequency);
-        }
-        else if(TickGet() - t2 >= dt ) {
-             t2=TickGet();
-             MyLedMonitor->MySequence.curStep++;
-             if (MyLedMonitor->MySequence.curStep>0){ //always turn off those before
-                        for (ii=0;ii<MyLedMonitor->MySequence.NledsThisStep[MyLedMonitor->MySequence.curStep-1];ii++){
-                            id=MyLedMonitor->MySequence.IDledsThisStep[MyLedMonitor->MySequence.curStep-1][ii];
-                            if (MyLedMonitor->MySequence.isMultiDC){
-                                turn_on_off(id+0*DFLT_CH_PER_BOARD/4,id+1*DFLT_CH_PER_BOARD/4,id+2*DFLT_CH_PER_BOARD/4,id+3*DFLT_CH_PER_BOARD/4,FALSE,MyLedMonitor->color,MyLedMonitor->Amplitude[id],DC_WIDTH);
-                             }
-                             else if(id==BLANK_CH){
-                                 Nop();
-                             }
-                             else  {
-                                   turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,MyLedMonitor->Amplitude[id], MyLedMonitor->Width[id]);
-                                   bd=GetBoard(id);
-                                   MyLedMonitor->LedStatus_high[bd]=0x0;
-                                   MyLedMonitor->LedStatus_low[bd]=0x0;
-                             }
-                        }
-             }
-             if (MyLedMonitor->MySequence.curStep<MyLedMonitor->MySequence.Nsteps){
-                 /*TURN ON LEDs, */
-                 for (ii=0;ii<MyLedMonitor->MySequence.NledsThisStep[MyLedMonitor->MySequence.curStep];ii++){
-                   id=MyLedMonitor->MySequence.IDledsThisStep[MyLedMonitor->MySequence.curStep][ii];
-                   if (MyLedMonitor->MySequence.isMultiDC){
-                       turn_on_off(id+0*DFLT_CH_PER_BOARD/4,id+1*DFLT_CH_PER_BOARD/4,id+2*DFLT_CH_PER_BOARD/4,id+3*DFLT_CH_PER_BOARD/4,TRUE,MyLedMonitor->color,MyLedMonitor->Amplitude[id],DC_WIDTH);
-                   }
-                   else if (id==BLANK_CH) { /*So we have also the pause in the sequence*/
-                     Nop();
-                   }
-                   else {
-                     turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,TRUE,MyLedMonitor->color,MyLedMonitor->Amplitude[id], MyLedMonitor->Width[id]);                   
-                     bd=GetBoard(id);
-                     id=GetIdInBoard(id);
-                     if (id<32){
-                           MyLedMonitor->LedStatus_low[bd]=((0x1)<<id);
-                           MyLedMonitor->LedStatus_high[bd]=0;
-                        }
-                        else {
-                          MyLedMonitor->LedStatus_low[bd]=0;
-                          MyLedMonitor->LedStatus_high[bd]=((0x1)<<(id-32));
-                        }
-                    }
-                   }
-                 //TEMPORARY WORK AROUND DUE TO I2C BUS CONFLICT:
-                 sel_clk(MyLedMonitor->FT_clk_src,MyLedMonitor->FT_int_frequency);
-             }
-             else if (MyLedMonitor->MySequence.Nrepetitions==-1){ /*We reiterate at libitum*/
-                 MyLedMonitor->MySequence.curStep=-1;
-                 MyLedMonitor->MySequence.curRepetition++;
-                }
-             else if (MyLedMonitor->MySequence.curRepetition<MyLedMonitor->MySequence.Nrepetitions){ /*We reiterate a finite number of times*/
-                 MyLedMonitor->MySequence.curStep=-1;
-                 MyLedMonitor->MySequence.curRepetition++;
-                }
-             else{ /*Turn off sequence*/
-                 MyLedMonitor->MySequence.curStep=-1;
-                 MyLedMonitor->MySequence.curRepetition=0;
-                 MyLedMonitor->MySequence.isOn=FALSE;
-                 for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){ /*TURN THEM OFF*/
-                     turn_on_off(0+ii*DFLT_CH_PER_BOARD,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,MyLedMonitor->Amplitude[0], MyLedMonitor->Width[0]);
-                     turn_on_off(14+ii*DFLT_CH_PER_BOARD,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,MyLedMonitor->Amplitude[0], MyLedMonitor->Width[0]);
-                     turn_on_off(28+ii*DFLT_CH_PER_BOARD,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,MyLedMonitor->Amplitude[0], MyLedMonitor->Width[0]);
-                     turn_on_off(42+ii*DFLT_CH_PER_BOARD,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,MyLedMonitor->Amplitude[0], MyLedMonitor->Width[0]);
-                     MyLedMonitor->LedStatus_low[ii]=0x0;
-                     MyLedMonitor->LedStatus_high[ii]=0x0;
-                 }
-
-                 //TEMPORARY WORK AROUND DUE TO I2C BUS CONFLICT:
-                 sel_clk(MyLedMonitor->FT_clk_src,MyLedMonitor->FT_int_frequency);
-                }
-             }
-    }//end sequence_is_on
-    else if (MyLedMonitor->MyScan.isOn){
-       if (MyLedMonitor->MyScan.curGroup==-1) { /*First group, at the beginning*/
-        /*  Turn OFF all the LEDs*/
-            for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-                if (hasBoardOneLEDOn(ii,MyLedMonitor)){
-                    id=getBoardLEDOn(ii,MyLedMonitor);
-                    id=id+ii*DFLT_CH_PER_BOARD;
-                    turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,0,0);
-                    }
-                MyLedMonitor->LedStatus_low[ii]=0x0;
-                MyLedMonitor->LedStatus_high[ii]=0x0;
-            }
-            /*Init the scan*/
-             t2=TickGet();
-             MyLedMonitor->MyScan.curGroup++;
-             MyLedMonitor->MyScan.curStep=-1;
-       }
-       if (MyLedMonitor->MyScan.curGroup>=DFLT_CH_PER_BOARD){
-             MyLedMonitor->MyScan.isOn=FALSE;
-             MyLedMonitor->MyScan.curStep=-1;
-             MyLedMonitor->MyScan.curGroup=-1;
-       }
-       else if (ScanHasOneLEDOn(MyLedMonitor,MyLedMonitor->MyScan.curGroup)){
-           max_step=0;
-           for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-               if (MyLedMonitor->MyScan.n_steps[ii*DFLT_CH_PER_BOARD+MyLedMonitor->MyScan.curGroup] >    max_step ){
-                   max_step = MyLedMonitor->MyScan.n_steps[ii*DFLT_CH_PER_BOARD+MyLedMonitor->MyScan.curGroup];
-               }
-           }
-           if ((TickGet() - t2 >= (MyLedMonitor->MyScan.Ton+MyLedMonitor->MyScan.Toff))||(MyLedMonitor->MyScan.curStep==-1)){
-              t2=TickGet();
-              MyLedMonitor->MyScan.curStep++;
-              if (MyLedMonitor->MyScan.curStep>=max_step){ //end scan for this LED group
-                 MyLedMonitor->MyScan.curStep=-1;
-                 MyLedMonitor->MyScan.curGroup++;
-              }
-              else{
-                for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-                    id=MyLedMonitor->MyScan.curGroup+ii*DFLT_CH_PER_BOARD;
-                    if (ScanHasThisLEDOn(MyLedMonitor,id)){
-                        amplitude=GetAmplScan(MyLedMonitor,id,MyLedMonitor->MyScan.curStep);
-                        if (amplitude){
-                            turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,TRUE,MyLedMonitor->color,amplitude,MyLedMonitor->Width[id]);
-                            id=GetIdInBoard(id);
-                            if (id<32){
-                                  MyLedMonitor->LedStatus_low[ii]=(1<<id);
-                                  MyLedMonitor->LedStatus_high[ii]=0x0;
-                            }
-                            else{
-                                MyLedMonitor->LedStatus_low[ii]=0x0;
-                                MyLedMonitor->LedStatus_high[ii]=(1<<(id-32));
-                            }
-                        }
-                        else{
-                         turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,0,MyLedMonitor->Width[id]);
-                         MyLedMonitor->LedStatus_low[ii]=0x0;
-                         MyLedMonitor->LedStatus_high[ii]=0x0;
-                        }
-                    }
-                }
-              }
-           }
-           else if(TickGet() - t2 >= (MyLedMonitor->MyScan.Ton) ){ //End of this step, start the pause before the next with all LEDs off
-               for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-                if (hasBoardOneLEDOn(ii,MyLedMonitor)){
-                    id=getBoardLEDOn(ii,MyLedMonitor);
-                    id=id+ii*DFLT_CH_PER_BOARD;
-                    turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,FALSE,MyLedMonitor->color,0,0);
-                    }
-                MyLedMonitor->LedStatus_low[ii]=0x0;
-                MyLedMonitor->LedStatus_high[ii]=0x0;
-            }
-           }
-       }// end ScanHasOneLEDOn
-       else{
-           t2=TickGet();
-           MyLedMonitor->MyScan.curGroup++;
-       }
-    }//end scan_is_on
-
-    else if (MyLedMonitor->LEDChanged){ /*This is triggered by SWITCH ON xxx*/
-         if (MyLedMonitor->LedToChange2!=BLANK_CH){ //LedToChange2 is always to switch off, if present
-                turn_on_off(MyLedMonitor->LedToChange2,BLANK_CH,BLANK_CH,BLANK_CH,0,MyLedMonitor->color,MyLedMonitor->Amplitude[MyLedMonitor->LedToChange2], MyLedMonitor->Width[MyLedMonitor->LedToChange2]);
-         }
-
-         turn_on_off(MyLedMonitor->LedToChange,BLANK_CH,BLANK_CH,BLANK_CH,isLedOn(MyLedMonitor->LedToChange,MyLedMonitor),MyLedMonitor->color,MyLedMonitor->Amplitude[MyLedMonitor->LedToChange], MyLedMonitor->Width[MyLedMonitor->LedToChange]);
-
-         //TEMPORARY WORK AROUND DUE TO I2C BUS CONFLICT:
-         sel_clk(MyLedMonitor->FT_clk_src,MyLedMonitor->FT_int_frequency);
-        //END
-
-         MyLedMonitor->LEDChanged=FALSE; //CRITICAL to not repeat this!
-         MyLedMonitor->LedToChange=-1;
-         MyLedMonitor->LedToChange2=-1;
-    }
-#ifdef HPS
-    else if (MyLedMonitor->colorChanged) {
-       int flag_touchcol=FALSE;
-       for (bd=0;bd<DFLT_NMBR_OF_BOARDS;bd++) {
-           if (hasBoardOneLEDOn(bd,MyLedMonitor)) {
-               flag_touchcol=TRUE;
-               id=getBoardLEDOn(bd,MyLedMonitor); //is the id in the board!
-               id+=bd*DFLT_CH_PER_BOARD;
-               turn_on_off(id,BLANK_CH,BLANK_CH,BLANK_CH,isLedOn(id,MyLedMonitor),MyLedMonitor->color,MyLedMonitor->Amplitude[id], MyLedMonitor->Width[id]);
-           }
-       }
-      //TEMPORARY WORK AROUND DUE TO I2C BUS CONFLICT:
-      if (flag_touchcol) sel_clk(MyLedMonitor->FT_clk_src,MyLedMonitor->FT_int_frequency);
-      //END
-       MyLedMonitor->colorChanged=FALSE;
-    }
-#endif
-    return;
-}
 
 
 /****************************************************************************

@@ -28,8 +28,7 @@ extern "C" {
 #define MAX_SEQ_DATA 16384
 typedef enum TFTP_Type{
     DO_NONE=0,
-    DO_LED_DATA,
-    DO_LED_SEQUENCE
+    DO_HODO_DATA,
 }TFTP_Type;
 CHAR MyTFTPClient(char *vFilename,IP_ADDR vipRemote,char *Data,int *n);
 
