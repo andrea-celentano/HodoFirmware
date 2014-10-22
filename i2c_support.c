@@ -276,29 +276,44 @@ BOOL I2CTransmitMoreBytesToAddress(int DataSz,UINT8 *i2cData, UINT8 addr){
  * @param addr The address of the object where to read from
  * @return
  */
-BOOL I2CReceiveBytesFromAddress(UINT8 cmd,int nByte,UINT8 *buffer,UINT8 addr)
+BOOL I2CReceiveBytesFromAddress(UINT8 cmd,int nByte,UINT8 *buffer,UINT8 addr,BOOL ack)
 {
     BOOL Success;
     int jj;
+
+    if (!I2CStartTransfer(FALSE)) return FALSE; //wait for the BUS to be ready
+
     if (cmd!=0x00) {
-        I2CTransmitOneByteToAddress(cmd,addr);
+         I2CTransmitOneByteToAddress(cmd,addr);
+         if(!I2CByteWasAcknowledged(MY_I2C_BUS)){
+         DBPRINTF("Error: Sent byte was not acknowledged\n");
+         Success=FALSE;
+         return FALSE;
+     }
     }
     //send again the address, with LSB to 1 (read)
     I2CTransmitOneByte(addr|0x01);
-
     //start read
-    while (I2CReceiverEnable (MY_I2C_BUS, TRUE ) != I2C_SUCCESS ); //enable the receiver
-
-    for (jj=0;jj<nByte;jj++){
-        if (I2CReceivedDataIsAvailable(MY_I2C_BUS))
-        {
-         buffer[jj] = I2CGetByte(MY_I2C_BUS);
-         if (jj==(nByte-1)) I2CAcknowledgeByte (MY_I2C_BUS,FALSE);
-         else  I2CAcknowledgeByte(MY_I2C_BUS,TRUE);
-        }
-    }
   
 
+    for (jj=0;jj<nByte;jj++){
+        while (I2CReceiverEnable (MY_I2C_BUS, TRUE ) != I2C_SUCCESS ); //enable the receiver
+        while (!I2CReceivedDataIsAvailable(MY_I2C_BUS));
+        if (jj==(nByte-1)) I2CAcknowledgeByte(MY_I2C_BUS,ack);
+        else I2CAcknowledgeByte(MY_I2C_BUS,TRUE);
+        buffer[jj] = I2CGetByte(MY_I2C_BUS);
+
+       // while (!I2CAcknowledgeHasCompleted(MY_I2C_BUS));
+        while ( !I2CTransmissionHasCompleted(MY_I2C_BUS) );
+#if defined(PIC32_STARTER_KIT)
+         DBPRINTF("Word: %x \n",buffer[jj]);
+#endif
+         while ( I2C2CON & 0x1F );
+        
+        
+    }
+  
+    I2CStopTransfer();
     return TRUE;
 }
 
@@ -310,7 +325,7 @@ BOOL I2CReceiveBytesFromAddress(UINT8 cmd,int nByte,UINT8 *buffer,UINT8 addr)
 void I2CMainInit(){
         UINT32 freq;
         I2CConfigure(MY_I2C_BUS, I2C_EN); //void
-        freq=I2CSetFrequency(MY_I2C_BUS,GetPeripheralClock(),  I2C_CLOCK_FREQ);
+        freq=I2CSetFrequency(MY_I2C_BUS,GetPeripheralClock(),I2C_CLOCK_FREQ);
 #if defined(PIC32_STARTER_KIT)
         DBPRINTF("I2C actual freq: %i",freq);
 #endif

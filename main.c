@@ -230,7 +230,11 @@ int main(void)
    
         //THIS IS THE INSTRUCTION TO INIT THE MAIN I2C BUS
         I2CMainInit();
-       
+          //1: disable the pcf
+         I2CTransmitOneByteToAddress(0x00,I2C_SEL);
+         I2CTransmitOneByteToAddress(0x00,I2C_SEL|0x02);
+         //1a: a pause
+         for (jj=0;jj<NPAUSE;jj++) Nop();
 
         //Init the HodoCrate
         int ret=1;
@@ -264,11 +268,9 @@ int main(void)
                 FirmSettings.useDHCP=1;
                 FirmSettings.DataFileName[0]='\n';
                 FirmSettings.SequenceFileName[0]='\n';
-#ifdef HPS
-                sprintf(FirmSettings.NetBIOSName,"HPS LED BOARD");
-#else
-                sprintf(FirmSettings.NetBIOSName,"FT LED BOARD");
-#endif
+
+                sprintf(FirmSettings.NetBIOSName,"FT HODO BOARD");
+
                 LED1_IO=0;
                 LED2_IO=0;
                 for (ii=0;ii<10;ii++)
@@ -556,6 +558,7 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
     char **token;
     int Nwords=0;
     int ii,ch,id,board,Itmp,Itmp2;
+    float Ftmp;
     unsigned short uStmp,uStmp1,uStmp2;
     UINT32 uint32tmp;
     BOOL Btmp;
@@ -683,7 +686,7 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
                 if (Nwords==4){
                     ch=atoi(token[2]);
                     uStmp=atoi(token[3]);
-                    SetAmplitude(ch,uStmp,MyHodoCrate); //This triggers also LEDChanged. TODO: get the return code and check it
+                    SetAmplitude(ch,uStmp,MyHodoCrate); 
                     }
                 else{
                     sprintf(str,"ERROR SET AMPL\n");
@@ -785,8 +788,8 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
            }
            else if (Nwords==3){
                     ch=atoi(token[2]); //this is the board actually!
-                    Itmp=ReadTemperature(ch,MyHodoCrate);
-                    sprintf(str,"%i \n",Itmp);
+                    Ftmp=ReadTemperature(ch,MyHodoCrate);
+                    sprintf(str,"%2.4f \n",Ftmp);
                  }
        }
       }//end "GET" commands

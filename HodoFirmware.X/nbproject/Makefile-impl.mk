@@ -31,7 +31,7 @@ DEFAULTCONF=FT
 CONF=${DEFAULTCONF}
 
 # All Configurations
-ALLCONFS=FT 
+ALLCONFS=FT Debug 
 
 
 # build
@@ -46,12 +46,14 @@ ALLCONFS=FT
 # clobber
 .clobber-impl: .clobber-pre .depcheck-impl
 	    ${MAKE} SUBPROJECTS=${SUBPROJECTS} CONF=FT clean
+	    ${MAKE} SUBPROJECTS=${SUBPROJECTS} CONF=Debug clean
 
 
 
 # all
 .all-impl: .all-pre .depcheck-impl
 	    ${MAKE} SUBPROJECTS=${SUBPROJECTS} CONF=FT build
+	    ${MAKE} SUBPROJECTS=${SUBPROJECTS} CONF=Debug build
 
 
 

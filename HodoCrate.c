@@ -91,7 +91,7 @@ int UpdateOutput(int ch,HodoCrate *m_crate){
     int ret;
     int board;
     int ch_in_board;
-
+    int jj;
     UINT8 pcf_addr,pcf_data;
 
     unsigned short dac_val;
@@ -124,16 +124,26 @@ int UpdateOutput(int ch,HodoCrate *m_crate){
         pcf_data=1<<(BOARD_ENABLED_FIRST_PCF-board);
     }
     I2CTransmitOneByteToAddress(pcf_data,pcf_addr);
+    //1a: a pause to let the PCF set the output to 1
+    for (jj=0;jj<NPAUSE;jj++) Nop();
     //2: enable the output
     dac_addr=I2C_DAC|(0x02*(ch_in_board/CH_PER_DAC));
     dac_data[0]=((ch_in_board%CH_PER_DAC)<<1)&0x06; //&0000 0110
     dac_data[0]=dac_data[0]|UPDATE_DAC_OUTPUT; //&0001 0000
-    dac_data[1]=(dac_val>>7)&0xff; //bits 4---11 of dac_val goes in bits 0..7 of dac_data[1];
-    dac_data[2]=(dac_val<<4)&0xf0; //bits 0--3 of dac_val goes in bits 4..7 of dac_data[2];
-    I2CTransmitMoreBytesToAddress(3,dac_data,dac_addr);
+    dac_val=dac_val&0x0fff; //just for me, this are 12 bits.
+    dac_data[1]=(dac_val>>4)&0xff; //bits 4---11 of dac_val goes in bits 0..7 of dac_data[1];
+    dac_data[2]=(dac_val&0x00f)<<4; //bits 0--3 of dac_val goes in bits 4..7 of dac_data[2];
+    #if defined(PIC32_STARTER_KIT)
+    DBPRINTF("update:%i .. %x %x %x \n",dac_val,dac_data[0],dac_data[1],dac_data[2]);
+    #endif
 
+
+    I2CTransmitMoreBytesToAddress(3,dac_data,dac_addr);
+    for (jj=0;jj<NPAUSE;jj++) Nop();
     //Finally, disable any I2C communication.
      I2CTransmitOneByteToAddress(0x0,pcf_addr);
+     // last pause
+     for (jj=0;jj<NPAUSE;jj++) Nop();
      
      ret = 0;
      return ret;
@@ -178,6 +188,7 @@ int GetIdInBoard(int ch){
 //Temperature functions
 int InitTemperature(int board,HodoCrate *m_crate){
     int ret=0;
+    int jj;
     UINT8 pcf_addr,pcf_data,temperature_data[2];
     if ((board<0)||(board>=DFLT_NMBR_OF_BOARDS)){
         ret =1;
@@ -194,33 +205,38 @@ int InitTemperature(int board,HodoCrate *m_crate){
         pcf_data=1<<(BOARD_ENABLED_FIRST_PCF-board);
     }
     I2CTransmitOneByteToAddress(pcf_data,pcf_addr);
-
+    //1a: a pause
+    for (jj=0;jj<NPAUSE;jj++) Nop();
     //2:Configure the temperature sensor
     temperature_data[0]=CONFIGURATION_REGISTER;
     temperature_data[1]=R12;
     I2CTransmitMoreBytesToAddress(2,temperature_data,I2C_TEMPERATURE);
+    for (jj=0;jj<NPAUSE;jj++) Nop();
     temperature_data[0]=TEMPERATURE_REGISTER; //this will setup the device so that any further command to read temperature doens't have to communicate with the configuration register
     I2CTransmitOneByteToAddress(temperature_data[0],I2C_TEMPERATURE);
+    for (jj=0;jj<NPAUSE;jj++) Nop();
     //Finally, disable any I2C communication.
     I2CTransmitOneByteToAddress(0x0,pcf_addr);
-
+    for (jj=0;jj<NPAUSE;jj++) Nop();
      ret = 0;
      return ret;
 }
 int InitTemperatureAll(HodoCrate *m_crate){
     int ret=0;
     int ii=0;
-    for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-        ret+=InitTemperature(ii,m_crate);
-    }
+    //for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
+    //    ret+=InitTemperature(ii,m_crate);
+    //}
+    ret+=InitTemperature(14,m_crate);
     return ret;
 }
-int ReadTemperature(int board,HodoCrate *m_crate){
-    int ret=0;
+float ReadTemperature(int board,HodoCrate *m_crate){
+    float ret=0;
+    int jj=0;
     UINT8 pcf_addr,pcf_data;
     UINT8 temperature_data[2];
     if ((board<0)||(board>=DFLT_NMBR_OF_BOARDS)){
-        ret =1;
+        ret = 1;
         return ret;
     }
     //1: enable the corresponding PCF
@@ -234,22 +250,31 @@ int ReadTemperature(int board,HodoCrate *m_crate){
         pcf_data=1<<(BOARD_ENABLED_FIRST_PCF-board);
     }
     I2CTransmitOneByteToAddress(pcf_data,pcf_addr);
+    for (jj=0;jj<NPAUSE;jj++) Nop();
 
     //Read the temperature from the sensor
     //Here we assume that the InitTemperature function has already been called
     //so that the sensor is ready to communicate the temperature
-    I2CReceiveBytesFromAddress(0x00,2,temperature_data,I2C_TEMPERATURE);
-    ret=((temperature_data[1]<<8)|(temperature_data[0] & 0xff))&0x0fff;
+    I2CReceiveBytesFromAddress(0x00,2,temperature_data,I2C_TEMPERATURE,TRUE);
+    //ret=((temperature_data[1]<<8)|(temperature_data[0] & 0xff))&0x0fff;
 
+    ret=(float)temperature_data[0]; //this is already in Celsius
+    ret=ret+(float)((temperature_data[1]>>4)&0x0f)*TEMPERATURE_RES;
+    
     //Finally, disable any I2C communication.
     I2CTransmitOneByteToAddress(0x0,pcf_addr);
-
+   // last pause
+    for (jj=0;jj<NPAUSE;jj++) Nop();
 
     return ret;
 
 }
 
 int turn_system_on_off(BOOL turnOn,HodoCrate *m_crate){
+    int jj;
+ 
+
+
     if (turnOn) InitTemperatureAll(m_crate);
     return 0;
 }

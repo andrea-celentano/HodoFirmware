@@ -23,7 +23,9 @@ extern "C" {
 
 #define DFLT_AMPL 0
 
+#define NPAUSE 10000
 
+#define TEMPERATURE_RES 0.0625
 
 typedef struct HodoCrate{
 
@@ -46,7 +48,7 @@ int UpdateOutputAll(HodoCrate *m_crate);
 
 int InitTemperature(int board,HodoCrate *m_crate);
 int InitTemperatureAll(HodoCrate *m_crate);
-int ReadTemperature(int board,HodoCrate *m_crate);
+float ReadTemperature(int board,HodoCrate *m_crate);
 
 int turn_system_on_off(BOOL turnOn,HodoCrate *m_crate);
 
