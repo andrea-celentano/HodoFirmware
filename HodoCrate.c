@@ -73,7 +73,7 @@ int SetAmplitudeAll(int val,HodoCrate *m_crate){
 
 int GetAmplitude(int ch,HodoCrate *m_crate){
     int ret;
-    if ((ch<0)||(ch>DFLT_NMBR_OF_CH)){
+    if ((ch<0)||(ch>=DFLT_NMBR_OF_CH)){
         ret =-1;
         return ret;
     }
@@ -218,16 +218,33 @@ int InitTemperature(int board,HodoCrate *m_crate){
     //Finally, disable any I2C communication.
     I2CTransmitOneByteToAddress(0x0,pcf_addr);
     for (jj=0;jj<NPAUSE;jj++) Nop();
-     ret = 0;
-     return ret;
+    ret = 0;
+    return ret;
 }
 int InitTemperatureAll(HodoCrate *m_crate){
     int ret=0;
     int ii=0;
-    //for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
-    //    ret+=InitTemperature(ii,m_crate);
-    //}
-    ret+=InitTemperature(14,m_crate);
+    int jj=0;
+    for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
+        ret+=InitTemperature(ii,m_crate);
+    for (jj=0;jj<NPAUSE;jj++) Nop();
+    }
+  /*  ret+=InitTemperature(0 ,m_crate);
+     ret+=InitTemperature(1 ,m_crate);    for (jj=0;jj<NPAUSE;jj++) Nop();
+     ret+=InitTemperature(2 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
+     ret+=InitTemperature(3 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
+     ret+=InitTemperature(4 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+     ret+=InitTemperature(5 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+      ret+=InitTemperature(6 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+       ret+=InitTemperature(7 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(8 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+         ret+=InitTemperature(9 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+          ret+=InitTemperature(10 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+      ret+=InitTemperature(11 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
+      ret+=InitTemperature(12 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+      ret+=InitTemperature(13,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+    ret+=InitTemperature(14,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+*/
     return ret;
 }
 float ReadTemperature(int board,HodoCrate *m_crate){
@@ -236,7 +253,7 @@ float ReadTemperature(int board,HodoCrate *m_crate){
     UINT8 pcf_addr,pcf_data;
     UINT8 temperature_data[2];
     if ((board<0)||(board>=DFLT_NMBR_OF_BOARDS)){
-        ret = 1;
+        ret = -1000;
         return ret;
     }
     //1: enable the corresponding PCF

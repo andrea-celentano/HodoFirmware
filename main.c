@@ -232,9 +232,12 @@ int main(void)
         I2CMainInit();
           //1: disable the pcf
          I2CTransmitOneByteToAddress(0x00,I2C_SEL);
+         //pause
+         for (jj=0;jj<NPAUSE2;jj++) Nop();
+
          I2CTransmitOneByteToAddress(0x00,I2C_SEL|0x02);
          //1a: a pause
-         for (jj=0;jj<NPAUSE;jj++) Nop();
+         for (jj=0;jj<NPAUSE2;jj++) Nop();
 
         //Init the HodoCrate
         int ret=1;
@@ -506,10 +509,6 @@ concorrent_loop:
                                  sprintf(str,"Decode hodo data\n");
                                 // DecodeLedData(MyLedMonitor,Data,nData,str);
                             }
-                            else if  (0){
-                                    sprintf(str,"Decode sequence\n");
-                                //    DecodeLedSequence(MyLedMonitor,Data,nData,str);
-                            }
                             smDOWNLOAD=TFTP_DOWNLOAD_RESOLVE_IP;
                             doTFTP=DO_NONE;
                             break;
@@ -683,56 +682,52 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
         }
         
          else if ((strcmp(token[1],"AMPL")==0)|| (strcmp(token[1],"AMPLITUDE")==0)){
-                if (Nwords==4){
+             if (MyHodoCrate->status==FALSE){
+                sprintf(str,"First TURN ON THE SYTEM");
+                }
+             else if (Nwords==4){
                     ch=atoi(token[2]);
                     uStmp=atoi(token[3]);
                     SetAmplitude(ch,uStmp,MyHodoCrate); 
-                    }
+                    UpdateOutput(ch,MyHodoCrate);
+                }
                 else{
                     sprintf(str,"ERROR SET AMPL\n");
                     //TODO: ERROR HERE
                 }
             }//end AMPLITUDE
         else if ((strcmp(token[1],"AMPL_ALL")==0)|| (strcmp(token[1],"AMPLITUDE_ALL")==0)){
-                if (Nwords==3){                
+            if (MyHodoCrate->status==FALSE){
+                sprintf(str,"First TURN ON THE SYTEM");
+            }
+            else if (Nwords==3){
                     uStmp=atoi(token[2]);
-                    SetAmplitudeAll(uStmp,MyHodoCrate); //This triggers also LEDChanged. TODO: get the return code and check it
+                    SetAmplitudeAll(uStmp,MyHodoCrate);
+                    UpdateOutputAll(MyHodoCrate);
                 }
                 else{
                     //TODO: ERROR HERE
                 }    
             }//end AMPLITUDE_ALL 
             else if (strcmp(token[1],"DATA")==0){ //SET DATA n ID1 AMPL1 IDN AMPLN
-                if ((Nwords>3) && ((Nwords-3)%3==0)){
+                if (MyHodoCrate->status==FALSE){
+                 sprintf(str,"First TURN ON THE SYTEM");
+                }
+                else if ((Nwords>3) && ((Nwords-3)%3==0)){
                     uStmp=atoi(token[2]); //how many channels
                     if ((Nwords-3)==(2*uStmp)){
                         for (ii=0;ii<uStmp;ii++){
                             ch=atoi(token[3+ii*2]);
                             uStmp1=atoi(token[3+ii*2+1]);
                             SetAmplitude(ch,uStmp1,MyHodoCrate);
-                         }
+                            UpdateOutput(ch,MyHodoCrate);
+                        }
                     }
                 }
             } //end SET DATA
         }//end "SET" commands
 
-        else if (strcmp(token[0],"UPDATE")==0) {
-            if (MyHodoCrate->status==FALSE){
-                sprintf(str,"First TURN ON THE SYTEM");
-            }
-            else if (Nwords==2){
-                ch=atoi(token[1]);
-                UpdateOutput(ch,MyHodoCrate);
-            }
-        } //end UPDATE
-        else if (strcmp(token[0],"UPDATE_ALL")==0){
-            if (MyHodoCrate->status==FALSE){
-                sprintf(str,"First TURN ON THE SYTEM");
-            }
-            else{
-                UpdateOutputAll(MyHodoCrate);
-            }
-        } //end UPDATE_ALL
+   
            //here starts the "GET" commands.
             //These modifies the str buffer!
        else if (strcmp(token[0],"GET")==0) {
@@ -771,7 +766,7 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
                    //TODO: error
                }
           }//end "GET AMPL"
-            else if (strcmp(token[1],"AMPL_ALL")==0){
+          else if (strcmp(token[1],"AMPL_ALL")==0){
             sprintf(&str[strlen(str)],"%i ",DFLT_NMBR_OF_CH);
             for (ii=0;ii<DFLT_NMBR_OF_CH;ii++){
               uStmp=GetAmplitude(ii,MyHodoCrate);
@@ -791,7 +786,18 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
                     Ftmp=ReadTemperature(ch,MyHodoCrate);
                     sprintf(str,"%2.4f \n",Ftmp);
                  }
+           else  {
+                sprintf(str,"BAD COMMAND \n");
+           }
        }
+        else if (strcmp(token[1],"TEMPERATURE_ALL")==0){
+            sprintf(&str[strlen(str)],"%i ",DFLT_NMBR_OF_BOARDS);
+            for (ii=0;ii<DFLT_NMBR_OF_BOARDS;ii++){
+              Ftmp=ReadTemperature(ii,MyHodoCrate);
+              sprintf(&str[strlen(str)],"%2.4f ",Ftmp);
+          }
+          sprintf(&str[strlen(str)],"\n");
+        }
       }//end "GET" commands
        else  if (Nwords) {
           sprintf(str,"BAD COMMAND\n");

@@ -24,6 +24,7 @@ extern "C" {
 #define DFLT_AMPL 0
 
 #define NPAUSE 10000
+#define NPAUSE2 100000
 
 #define TEMPERATURE_RES 0.0625
 
