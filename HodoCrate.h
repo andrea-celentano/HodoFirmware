@@ -52,6 +52,9 @@ int InitTemperature(int board,HodoCrate *m_crate);
 int InitTemperatureAll(HodoCrate *m_crate);
 float ReadTemperature(int board,HodoCrate *m_crate);
 
+int ReadMultiplexer(int id);
+int WriteMultiplexer(int id,int val);
+
 int turn_system_on_off(BOOL turnOn,HodoCrate *m_crate);
 
 #ifdef	__cplusplus

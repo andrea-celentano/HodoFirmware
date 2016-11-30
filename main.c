@@ -178,10 +178,6 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate);
 //
 int main(void)
 {
-    #if defined(PIC32_STARTER_KIT)
-        DBINIT();
-        DBPRINTF("STARTING DEBUGGER CONSOLE\n");
-    #endif
 
 
 	static DWORD t = 0;
@@ -194,6 +190,14 @@ int main(void)
         int ii,jj=0;
         char checkFlash=0;
         BOOL flag_boot_ok;
+        BOOL isDEBUG=FALSE;
+
+    #if defined(PIC32_STARTER_KIT)
+        DBINIT();
+        DBPRINTF("STARTING DEBUGGER CONSOLE\n");
+        isDEBUG=TRUE;
+    #endif
+
 
 
          /*Are we here due to a past watch-dog event?*/
@@ -225,41 +229,19 @@ int main(void)
 	#endif
 
 
-        //Initiates board setup process if button is depressed
-	//on startup
-   
-        //THIS IS THE INSTRUCTION TO INIT THE MAIN I2C BUS
-        I2CMainInit();
-          //1: disable the pcf
-         I2CTransmitOneByteToAddress(0x00,I2C_SEL);
-         //pause
-         for (jj=0;jj<NPAUSE2;jj++) Nop();
-
-         I2CTransmitOneByteToAddress(0x00,I2C_SEL|0x02);
-         //1a: a pause
-         for (jj=0;jj<NPAUSE2;jj++) Nop();
-
-        //Init the HodoCrate
-        int ret=1;
-        MyHodoCrate=InitHodoCrate();
-        if (MyHodoCrate==NULL){
-            DBPRINTF("Error initialization structure MyLedMonitor\n");
-            while(1); //stop here
-        }
-        //load default values
-        ret=LoadDefaultHodoCrate(MyHodoCrate);
-     
-        // Initialize Stack and application related NV variables into AppConfig.
+      DBPRINTF("STACK CONFIG\n");
+                // Initialize Stack and application related NV variables into AppConfig.
 	InitAppConfig();
         // Initialize core stack layers (MAC, ARP, TCP, UDP) and
 	// application modules (HTTP, SNMP, etc.)
 
 
         /*Load default settings from the FLASH*/
-         if(BUTTON0_IO != 0u){
+         if ((BUTTON0_IO != 0u)&&(isDEBUG==FALSE)){
             ReadSettingsFromFlash(&FirmSettings);
             checkFlash=FirmSettings.InitCheckWord;
             if (checkFlash!='a'){
+                DBPRINTF("FIRST TIME LOAD DFLT \n");
                 FirmSettings.useDHCP=1;
                 FirmSettings.InitCheckWord='a';
                 FirmSettings.ip.Val=0xC0A80001; //192.168.0.1
@@ -278,19 +260,20 @@ int main(void)
                 {
                    LED1_IO ^= 1;
                    LED2_IO ^= 1;
-                  for (jj=0;jj<1000000;jj++) Nop();
+                   for (jj=0;jj<1000000;jj++) Nop();
                }
                 LED1_IO=0;
                 LED2_IO=0;
                 WriteSettingsToFlash(&FirmSettings);
                 for (jj=0;jj<10000000;jj++) Nop();
-                Reset();
+                DBPRINTF("FIRST TIME LOAD DFLT done\n");
+                Reset();        
             }
             else{
             /*Load them*/
                 strcpy(AppConfig.NetBIOSName,FirmSettings.NetBIOSName);
                 if ((FirmSettings.useDHCP==1)){
-                     AppConfig.Flags.bIsDHCPEnabled = 1;
+                    AppConfig.Flags.bIsDHCPEnabled = 1;
                     LED0_IO=0;
                     for (ii=0;ii<10;ii++)
                      {
@@ -317,7 +300,8 @@ int main(void)
                 flag_boot_ok=TRUE;
                 }
        }
-       else{
+         else{ //BUTTON pushed
+             DBPRINTF("BUTTON PUSHED LOAD DFLT \n");
              FirmSettings.InitCheckWord='a';
              FirmSettings.ip.Val=0xC0A80001; //192.168.0.1
              FirmSettings.mask.Val=0x0;
@@ -328,6 +312,7 @@ int main(void)
              FirmSettings.SequenceFileName[0]='\n';
              strcpy(FirmSettings.NetBIOSName,"DFLT");
              WriteSettingsToFlash(&FirmSettings);
+             AppConfig.Flags.bIsDHCPEnabled = 1;
              flag_boot_ok=FALSE;
         }
 
@@ -335,13 +320,12 @@ int main(void)
 
 
         StackInit();
-        
-              
 
+    
 	// Initialize any application-specific modules or functions/
-	
+
 	#if defined(STACK_USE_ZEROCONF_LINK_LOCAL)
-    ZeroconfLLInitialize();
+        ZeroconfLLInitialize();
 	#endif
 
 	#if defined(STACK_USE_ZEROCONF_MDNS_SD)
@@ -356,14 +340,14 @@ int main(void)
 		NULL							    // no application context
 		);
 
-    mDNSMulticastFilterRegister();			
+    mDNSMulticastFilterRegister();
 	#endif
       //Do something to show we are at the beginning. BLINK LEDs
 
         LED0_IO=0;
         LED1_IO=1;
         LED2_IO=0;
-       
+
         for (ii=0;ii<10;ii++)
         {
             LED0_IO ^= 1;
@@ -377,6 +361,36 @@ int main(void)
         LED2_IO=0;
 
         IPshowCounter=ANNOUNCE_PERIOD;
+
+        DBPRINTF("STACK DONE\n");
+      
+
+
+
+        //Initiates board setup process if button is depressed
+	//on startup
+   
+        //THIS IS THE INSTRUCTION TO INIT THE MAIN I2C BUS
+         I2CMainInit();
+          //1: disable the pcf
+         I2CTransmitOneByteToAddress(0x00,I2C_SEL);
+         //pause
+         for (jj=0;jj<NPAUSE2;jj++) Nop();
+
+         I2CTransmitOneByteToAddress(0x00,I2C_SEL|0x02);
+         //1a: a pause
+         for (jj=0;jj<NPAUSE2;jj++) Nop();
+
+        //Init the HodoCrate
+        int ret=1;
+        MyHodoCrate=InitHodoCrate();
+        if (MyHodoCrate==NULL){
+            DBPRINTF("Error initialization structure MyLedMonitor\n");
+            while(1); //stop here
+        }
+        //load default values
+        ret=LoadDefaultHodoCrate(MyHodoCrate);
+     
        
 
                
@@ -726,6 +740,13 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
                     }
                 }
             } //end SET DATA
+            else if ((strcmp(token[1],"MULTIPLEXER")==0)||(strcmp(token[1],"MUX")==0)){
+                if (Nwords==4){
+                    ch=atoi(token[2]);
+                    uStmp1=atoi(token[3]);
+                    WriteMultiplexer(ch,uStmp1);
+                }
+            }//END SET MUX
         }//end "SET" commands
 
    
@@ -809,6 +830,13 @@ static void Decode(int length,char* str,HodoCrate* MyHodoCrate){
           }
           sprintf(&str[strlen(str)],"\n");
         }
+        else if ((strcmp(token[1],"MULTIPLEXER")==0)||(strcmp(token[1],"MUX")==0)){
+                if (Nwords==3){
+                    ch=atoi(token[2]);
+                    Itmp=ReadMultiplexer(ch);
+                    sprintf(str,"%i \n",Itmp);
+                }
+            }
       }//end "GET" commands
     else if (Nwords) {
         sprintf(str, "BAD COMMAND\n");

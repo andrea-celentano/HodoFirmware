@@ -55,7 +55,7 @@ int SetAmplitude(int ch, int val, HodoCrate *m_crate) {
         ret = 1;
         return ret;
     }
-    if ((val < 0) || (val >= MAX_DAC_VAL)) {
+    if ((val < 0) || (val > MAX_DAC_VAL)) {
         ret = 1;
         return ret;
     }
@@ -104,13 +104,15 @@ int UpdateOutput(int ch, HodoCrate *m_crate, int doReadBack) {
     }
     dac_val = m_crate->Amplitude[ch];
     //this check should be done also when the amplitude is loaded. 
-    if ((dac_val < 0) || (dac_val >= MAX_DAC_VAL)) {
-        ret = 1;
+    if ((dac_val < 0) || (dac_val > MAX_DAC_VAL)) {
+        ret = 2;
         return ret;
     }
 
     board = GetBoard(ch);
     ch_in_board = GetIdInBoard(ch);
+
+    DBPRINTF("bd: %i  ch_in_board: %i \n", board, ch_in_board);
 
     //1: enable the communication with the board trough the PCF
     if (board <= BOARD_ENABLED_FIRST_PCF) { //first PCF
@@ -122,6 +124,7 @@ int UpdateOutput(int ch, HodoCrate *m_crate, int doReadBack) {
         pcf_data = 1 << (BOARD_ENABLED_FIRST_PCF - board);
     }
     I2CTransmitOneByteToAddress(pcf_data, pcf_addr);
+    //I2CTransmitOneByteToAddress(0x80, pcf_addr);
     //1a: a pause to let the PCF set the output to 1
     for (jj = 0; jj < NPAUSE; jj++) Nop();
     //2: enable the output
@@ -132,21 +135,20 @@ int UpdateOutput(int ch, HodoCrate *m_crate, int doReadBack) {
     dac_data[1] = (dac_val >> 4)&0xff; //bits 4---11 of dac_val goes in bits 0..7 of dac_data[1];
     dac_data[2] = (dac_val & 0x00f) << 4; //bits 0--3 of dac_val goes in bits 4..7 of dac_data[2];
 #if defined(PIC32_STARTER_KIT)
-    DBPRINTF("update:%i .. %x %x %x \n", dac_val, dac_data[0], dac_data[1], dac_data[2]);
+    DBPRINTF("update:%i %i .. %x %x %x \n", dac_val,m_crate->Amplitude[ch], dac_data[0], dac_data[1], dac_data[2]);
 #endif
-
 
     I2CTransmitMoreBytesToAddress(3, dac_data, dac_addr);
     for (jj = 0; jj < NPAUSE; jj++) Nop();
 
-    ret=0;
+    ret = 0;
     if (doReadBack) {
         dac_val_read = GetAmplitudeDAC(ch);
         //re-enable I2C since above instruction disabled it
-         I2CTransmitOneByteToAddress(pcf_data, pcf_addr);
+        I2CTransmitOneByteToAddress(pcf_data, pcf_addr);
 
-         if (dac_val_read!=dac_val) ret=1;
-         else ret=0;
+        if (dac_val_read != dac_val) ret = 1;
+        else ret = 0;
     }
     //Finally, disable any I2C communication.
     I2CTransmitOneByteToAddress(0x0, pcf_addr);
@@ -200,17 +202,54 @@ int GetAmplitudeDAC(int ch) {
     dac_addr = I2C_DAC | (0x02 * (ch_in_board / CH_PER_DAC)); //A.C. do it better
     dac_data = ((ch_in_board % CH_PER_DAC) << 1)&0x06; //&0000 0110
     dac_data = dac_data | UPDATE_DAC_OUTPUT; //&0001 0000
-    I2CReceiveBytesFromAddress(2,dac_val_read,dac_addr,TRUE,dac_data,TRUE);
+    I2CReceiveBytesFromAddress(2, dac_val_read, dac_addr, TRUE, dac_data, TRUE);
     //3: disable I2C communication
     for (jj = 0; jj < NPAUSE; jj++) Nop();
     I2CTransmitOneByteToAddress(0x00, pcf_addr);
 
     //format the output
-    dac_val_read_tot=(dac_val_read[1]>>4)&0XF;
-    dac_val_read_tot|=((dac_val_read[0]<<4)&0xFFF);
-  
+    dac_val_read_tot = (dac_val_read[1] >> 4)&0XF;
+    dac_val_read_tot |= ((dac_val_read[0] << 4)&0xFFF);
+
 
     return dac_val_read_tot;
+
+}
+
+
+int ReadMultiplexer(int id){
+    UINT8 addr;
+    UINT8 data[1];
+
+    if (id==0) addr=I2C_SEL;
+    else if (id==1) addr=I2C_SEL|0x2;
+    else{
+        return -1;
+    }
+    I2CReceiveBytesFromAddress(1,data,addr,FALSE,0x0,0);
+
+    return data[0];
+
+}
+
+
+int WriteMultiplexer(int id,int val){
+    UINT8 addr;
+    UINT8 data;
+    int ret;
+    if (id==0) addr=I2C_SEL;
+    else if (id==1) addr=I2C_SEL|0x2;
+    else{
+        return -1;
+    }
+    if ((val>=0)&&(val<256)){
+        data=val;
+        ret=I2CTransmitOneByteToAddress(data,addr);
+        return ret;
+    }
+    else{
+        return -1;
+    }
 
 }
 
@@ -285,24 +324,25 @@ int InitTemperatureAll(HodoCrate *m_crate) {
     int ii = 0;
     int jj = 0;
     for (ii = 0; ii < DFLT_NMBR_OF_BOARDS; ii++) {
-        //  ret+=InitTemperature(ii,m_crate);
+        ret += InitTemperature(ii, m_crate);
         for (jj = 0; jj < NPAUSE; jj++) Nop();
     }
-    ret += InitTemperature(0, m_crate);
-    /*   ret+=InitTemperature(1 ,m_crate);    for (jj=0;jj<NPAUSE;jj++) Nop();
-       ret+=InitTemperature(2 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
-       ret+=InitTemperature(3 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
-       ret+=InitTemperature(4 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
-       ret+=InitTemperature(5 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+    
+    /*ret += InitTemperature(0, m_crate);
+        ret+=InitTemperature(1 ,m_crate);    for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(2 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(3 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(4 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(5 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
         ret+=InitTemperature(6 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
-         ret+=InitTemperature(7 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
-          ret+=InitTemperature(8 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
-           ret+=InitTemperature(9 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
-            ret+=InitTemperature(10 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(7 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(8 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(9 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(10 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
         ret+=InitTemperature(11 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
         ret+=InitTemperature(12 ,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
         ret+=InitTemperature(13,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
-      ret+=InitTemperature(14,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
+        ret+=InitTemperature(14,m_crate); for (jj=0;jj<NPAUSE;jj++) Nop();
      */
     return ret;
 }
@@ -331,7 +371,7 @@ float ReadTemperature(int board, HodoCrate *m_crate) {
     //Read the temperature from the sensor
     //Here we assume that the InitTemperature function has already been called
     //so that the sensor is ready to communicate the temperature
-    I2CReceiveBytesFromAddress(2, temperature_data, I2C_TEMPERATURE, TRUE,0x00,0);
+    I2CReceiveBytesFromAddress(2, temperature_data, I2C_TEMPERATURE, TRUE, 0x00, 0);
     //ret=((temperature_data[1]<<8)|(temperature_data[0] & 0xff))&0x0fff;
 
     ret = (float) temperature_data[0]; //this is already in Celsius
