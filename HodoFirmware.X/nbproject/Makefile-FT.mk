@@ -72,9 +72,6 @@ LDLIBSOPTIONS=
 FIXDEPS=fixDeps
 
 .build-conf:  ${BUILD_SUBPROJECTS}
-ifneq ($(INFORMATION_MESSAGE), )
-	@echo $(INFORMATION_MESSAGE)
-endif
 	${MAKE}  -f nbproject/Makefile-FT.mk dist/${CND_CONF}/${IMAGE_TYPE}/HodoFirmware.X.${IMAGE_TYPE}.${OUTPUT_SUFFIX}
 
 MP_PROCESSOR_OPTION=32MX795F512L

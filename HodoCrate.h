@@ -23,7 +23,7 @@ extern "C" {
 
 #define DFLT_AMPL 0
 
-#define NPAUSE 10000
+#define NPAUSE  5000
 #define NPAUSE2 100000
 
 #define TEMPERATURE_RES 0.0625
@@ -44,8 +44,9 @@ int GetIdInBoard(int ch);
 int SetAmplitude(int ch,int val,HodoCrate *m_crate);
 int SetAmplitudeAll(int val,HodoCrate *m_crate);
 int GetAmplitude(int ch,HodoCrate *m_crate);
-int UpdateOutput(int ch,HodoCrate *m_crate);
-int UpdateOutputAll(HodoCrate *m_crate);
+int GetAmplitudeDAC(int ch);
+int UpdateOutput(int ch,HodoCrate *m_crate,int doReadback);
+int UpdateOutputAll(HodoCrate *m_crate,int doReadback);
 
 int InitTemperature(int board,HodoCrate *m_crate);
 int InitTemperatureAll(HodoCrate *m_crate);

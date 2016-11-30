@@ -23,7 +23,7 @@ BOOL I2CTransmitOneByteToAddress(UINT8 data, UINT8 addr);
 BOOL I2CTransmitMoreBytes(int DataSz,UINT8* i2cData);
 BOOL I2CTransmitMoreBytesToAddress(int DataSz,UINT8 *i2cData, UINT8 addr);
 
-BOOL I2CReceiveBytesFromAddress(UINT8 cmd,int nByte,UINT8 *buffer,UINT8 addr,BOOL ack);
+BOOL I2CReceiveBytesFromAddress(int nByte,UINT8 *buffer,UINT8 addr,BOOL ack,UINT8 cmd,BOOL doCMD);
 
 
 

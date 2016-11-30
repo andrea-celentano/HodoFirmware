@@ -41,6 +41,7 @@ extern "C" {
 
 /*DAC*/
 //this are the values of the first word to be written
+#define STORE_DAC_OUTPUT 0x00
 #define UPDATE_DAC_OUTPUT 0x10 //has to be or-d with 0x0, 0x2,0x4,0x6 for ch 0,1,2,3
 #define POWER_DAC_DOWN 0x11 //has to be or-d with 0x0,0x2,0x4,0x6 for ch 0,1,2,3
 #define CH_PER_DAC 4

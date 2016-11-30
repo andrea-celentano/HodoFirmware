@@ -276,22 +276,17 @@ BOOL I2CTransmitMoreBytesToAddress(int DataSz,UINT8 *i2cData, UINT8 addr){
  * @param addr The address of the object where to read from
  * @return
  */
-BOOL I2CReceiveBytesFromAddress(UINT8 cmd,int nByte,UINT8 *buffer,UINT8 addr,BOOL ack)
+BOOL I2CReceiveBytesFromAddress(int nByte,UINT8 *buffer,UINT8 addr,BOOL ack,UINT8 cmd,BOOL doCMD)
 {
     BOOL Success;
     int jj;
 
-    if (!I2CStartTransfer(FALSE)) return FALSE; //wait for the BUS to be ready
-
-    if (cmd!=0x00) {
+  
+    if (doCMD==TRUE) {
          I2CTransmitOneByteToAddress(cmd,addr);
-         if(!I2CByteWasAcknowledged(MY_I2C_BUS)){
-         DBPRINTF("Error: Sent byte was not acknowledged\n");
-         Success=FALSE;
-         return FALSE;
-     }
     }
     //send again the address, with LSB to 1 (read)
+    I2CStartTransfer(FALSE); //wait for the BUS to be ready
     I2CTransmitOneByte(addr|0x01);
     //start read
   
