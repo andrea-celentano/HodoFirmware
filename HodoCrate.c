@@ -327,8 +327,8 @@ int InitTemperatureAll(HodoCrate *m_crate) {
         ret += InitTemperature(ii, m_crate);
         for (jj = 0; jj < NPAUSE; jj++) Nop();
     }
-    
-    /*ret += InitTemperature(0, m_crate);
+     
+   /* ret += InitTemperature(0, m_crate);
         ret+=InitTemperature(1 ,m_crate);    for (jj=0;jj<NPAUSE;jj++) Nop();
         ret+=InitTemperature(2 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
         ret+=InitTemperature(3 ,m_crate);  for (jj=0;jj<NPAUSE;jj++) Nop();
